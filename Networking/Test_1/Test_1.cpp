@@ -6,6 +6,10 @@
 #include <asio/ts/internet.hpp>  // Network
 
 int main() {
-	std::cout << "hello world";
+	asio::error_code ec;
+	asio::io_context context;  // for platform independence
+
+	// tcp endpoint
+	asio::ip::tcp::endpoint endpoint(asio::ip::make_address("111.11.11.111", ec), 80);
 	return 0;
 }
