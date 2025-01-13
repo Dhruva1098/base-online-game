@@ -10,6 +10,16 @@ int main() {
 	asio::io_context context;  // for platform independence
 
 	// tcp endpoint
-	asio::ip::tcp::endpoint endpoint(asio::ip::make_address("111.11.11.111", ec), 80);
+	asio::ip::tcp::endpoint endpoint(asio::ip::make_address("127.0.0.1", ec), 80);
+
+	// socket
+	asio::ip::tcp::socket socket(context);
+
+	// connect
+	socket.connect(endpoint, ec);
+	if (!ec) std::cout << "Connected\n";
+	else std::cout << "Failed\n" << ec.message() << std::endl;
+
+
 	return 0;
 }
