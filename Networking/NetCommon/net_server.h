@@ -50,7 +50,9 @@ public:
 
 					// user can deny connection
 					if (OnClientConnect(newConn)) {
-
+						m_deqConnections.push_back(std::move(newConn));
+						m_deqConnections.back()->ConnectToClient(nIDCounter++);
+						std::cout << "[" << m_deqConnections.baxk()->GetID() << "] Connection Approved\n";
 					}
 					else {
 						std::cout << "[----] Connection denied\n";
@@ -65,14 +67,52 @@ public:
 			}
 		)
 	}
-	// send message to a client
+	// send message to a specific client
 	void MessageClient(std::shared_ptr<connection<T>> client, const message<T>& msg) {
+		if (client && client->IsConnectrd()) {
+			client->Send(msg);
+		}  // now we do not know if client has disconnected because of TCP limitations, so if he has disconnected
+			// we remove him
+
+		else {
+			OnClientDisconnect(client);
+			m_deqConnections.erase(
+				std::remove(m_deqConnections.begin(), m_deqConnections.end(), client));
+		}
 
 	}
 	// send message to all clients
 	void MessageAllClients(const message<T>& msg, std::shared_ptr<connection<T>> pIgnoreClient = nullptr) {
-
+		bool bInvalidClientExists = false;
+		for (auto& client : m_deqConnections) {
+			if (client && client->IsConnected()) {
+				if (client != pIgnoreClient)
+					client->Send(msg);
+			}
+			else {
+				// assume client is disconnected
+				OnClientDisconnect(client);
+				client.reset();
+				bInvalidClientExists = true;	
+			}
+		}
+		// Little optimisation, als i do not want to change deque while iterating through it
+		if (bInvalidClientExists)
+			m_deqConnections.erase(
+				std::remove(m_deqConenctions.begin(), m_deqConnections.end(), nullptr));
 	}
+	void Update(size_t nMaxMessages = -1) {
+		size_t nMessageCount = 0;
+		while (nMessageCount < nMaxMessages && !m_qMessagesIn.empty()) {
+			// grab front message
+			auto msg = m_qMessagesIn.pop_front();
+
+			// pass it to message handler
+			OnMessage(msg.remote, msg.msg);
+			nMessageCount++;
+		}
+	}
+
 protected:
 	// when a client connects, can veto connection by returning false
 	virtual bool OnClientConnect(std::shared_ptr<connection<T>> client) {
@@ -89,6 +129,9 @@ protected:
 protected:
 	// thread sage queue for incoming messages
 	tsqueue<owned_message<T>> m_qMessagesIn;
+
+	// container for all active connections
+	std::deque<std::shared_ptr<connection<T>>> m_deqConnections;
 	
 	// order of init of asio
 	asio::io_context m_asioContext;
