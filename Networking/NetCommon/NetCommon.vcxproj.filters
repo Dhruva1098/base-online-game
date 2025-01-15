@@ -18,5 +18,23 @@
     <ClInclude Include="net_common.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="net_message.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="olc.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="net_thread_safe_queue.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="net_client.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="net_connection.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="net_server.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
