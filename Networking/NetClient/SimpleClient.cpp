@@ -1,5 +1,5 @@
 #include <iostream>
-#include <olc.h>
+#include "olc.h"
 
 enum class CustomMsgTypes : uint32_t {
 	FireBullet,
@@ -7,6 +7,5 @@ enum class CustomMsgTypes : uint32_t {
 };
 
 int main() {
-	message<CustomMsgTypes> msg;
-	msg.header.id = CustomMsgTypes::FireBullet;
+
 }

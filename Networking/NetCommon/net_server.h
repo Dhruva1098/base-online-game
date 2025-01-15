@@ -7,13 +7,14 @@
 template<typename T>
 class server_interface {
 public:
-	server_interface(uint16_t port) {
-		: m_asioAcceptor(m_asioContext, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), port))
+	server_interface(uint16_t port) 
+		: m_asioAcceptor(m_asioContext, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), port)){
 
 	}
 	virtual ~server_interface() {
 		Stop();
 	}
+
 	bool Start() {
 		try {
 			WaitForClientConnection();
@@ -21,14 +22,15 @@ public:
 			m_threadContext = std::thread([this]() { m_asioContext.run(); }); // order is important because we need to keep it alive
 
 		}
-		catch {
+		catch (std::exception& e) {
 			std::cerr << "[SERVER] exception occured: " << e.what() << "\n";
 			return false;
 		}
 		std::cout << "[SERVER] Started" << "\n";
 		return true;
 	}
-	bool Stop() {
+
+	void Stop() {
 		// close context
 		m_asioContext.stop();
 		
@@ -44,9 +46,9 @@ public:
 			[this](std::error_code ec, asio::ip::tcp::socket socket) {
 				if (!ec) {
 					std::cout << "[SERVER] New connection established: " << socket.remote_endpoint() << "\n";
-					std::shared_ptr<connection<T>> newConn =
-						std::make_shared<connection<T>>(connection<T>::owner::server,
-							m_asioContext, std::move(socket), m_qMessagesIn);
+					//std::shared_ptr<connection<T>> newConn =
+					//	std::make_shared<connection<T>>(connection<T>::owner::server,
+					//		m_asioContext, std::move(socket), m_qMessagesIn);
 
 					// user can deny connection
 					if (OnClientConnect(newConn)) {
@@ -65,7 +67,7 @@ public:
 				WaitForClientConnection();
 
 			}
-		)
+		);
 	}
 	// send message to a specific client
 	void MessageClient(std::shared_ptr<connection<T>> client, const message<T>& msg) {
@@ -99,7 +101,7 @@ public:
 		// Little optimisation, als i do not want to change deque while iterating through it
 		if (bInvalidClientExists)
 			m_deqConnections.erase(
-				std::remove(m_deqConenctions.begin(), m_deqConnections.end(), nullptr));
+				std::remove(m_deqConnections.begin(), m_deqConnections.end(), nullptr));
 	}
 	void Update(size_t nMaxMessages = -1) {
 		size_t nMessageCount = 0;
