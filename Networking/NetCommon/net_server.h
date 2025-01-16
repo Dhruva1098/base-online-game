@@ -46,15 +46,15 @@ public:
 			[this](std::error_code ec, asio::ip::tcp::socket socket) {
 				if (!ec) {
 					std::cout << "[SERVER] New connection established: " << socket.remote_endpoint() << "\n";
-					//std::shared_ptr<connection<T>> newConn =
-					//	std::make_shared<connection<T>>(connection<T>::owner::server,
-					//		m_asioContext, std::move(socket), m_qMessagesIn);
+					std::shared_ptr<connection<T>> newconn =
+						std::make_shared<connection<T>>(connection<T>::owner::server,
+							m_asioContext, std::move(socket), m_qMessagesIn);
 
 					// user can deny connection
-					if (OnClientConnect(newConn)) {
-						m_deqConnections.push_back(std::move(newConn));
+					if (OnClientConnect(newconn)) {
+						m_deqConnections.push_back(std::move(newconn));
 						m_deqConnections.back()->ConnectToClient(nIDCounter++);
-						std::cout << "[" << m_deqConnections.baxk()->GetID() << "] Connection Approved\n";
+						std::cout << "[" << m_deqConnections.back()->GetID() << "] Connection Approved\n";
 					}
 					else {
 						std::cout << "[----] Connection denied\n";
