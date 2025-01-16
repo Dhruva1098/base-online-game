@@ -34,8 +34,23 @@ public:
 			}
 		}
 	}
-	bool ConnectToServer();  // can only be called by client (duh)
-	bool Disconnect();
+	// can only be called by client (duh)
+	void ConnectToServer(const asio::ip::tcp::resolver::results_type& endpoints) {
+		if (m_nOwnerType == owner::client) {
+			asio::async_connect(m_socket, endpoints,
+				[this](std::error_code ec, asio::ip::tcp::endpoint endpoint) {
+					if (!ec) {
+						ReadHeader();
+					}
+				});
+		}
+	}
+	
+	void Disconnect() {
+		if (IsConnected()) {
+			asio::post(m_asioContext, [this]() { m_socket.close(); }); 
+		}
+	}
 	
 	bool IsConnected() const {
 		return m_socket.is_open();
@@ -54,7 +69,7 @@ public:
 			});
 	}
 
-privete:
+private:
 	// ASYNC: read message headers
 	void ReadHeader() {
 		asio::async_read(m_socket, asio::buffer(&m_msgTemporaryIn.header, sizeof(message_header<T>)),
@@ -72,9 +87,10 @@ privete:
 				else {
 					std::cout << "[" << id << "] Read Header Fail\n";
 					m_socket.close();
-				});
-			}
+				}
+			});
 	}
+	
 
 	// read body
 	void ReadBody() {
@@ -85,7 +101,7 @@ privete:
 				}
 				else {
 					std::cout << "[" << id << "] Read Body Failed\n";
-					m_socket.close()
+					m_socket.close();
 				}
 			});
 	}
@@ -104,12 +120,12 @@ privete:
 							WriteHeader();
 						}
 					}
-				} 
+				}
 				else {
 					std::cout << "[" << id << "] Write HEader fail.\n";
 					m_socket.close();
 				}
-			}
+			});
 	}
 
 	// write body
@@ -134,7 +150,7 @@ privete:
 		if (m_nOwnerType == owner::server)
 			m_qMessagesIn.push_back({ this->shared_from_this(), m_msgTemporaryIn });
 		else
-			m_q.MessagesIn.push_back({ nullptr, m_msgTemporaryIn });  // As clients only have one conenction anyway
+			m_qMessagesIn.push_back({ nullptr, m_msgTemporaryIn });  // As clients only have one conenction anyway
 
 		ReadHeader();  // Register another asio task 
 		
