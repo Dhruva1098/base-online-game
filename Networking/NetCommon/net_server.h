@@ -103,7 +103,9 @@ public:
 			m_deqConnections.erase(
 				std::remove(m_deqConnections.begin(), m_deqConnections.end(), nullptr));
 	}
-	void Update(size_t nMaxMessages = -1) {
+	void Update(size_t nMaxMessages = -1, bool bWait = false) {
+		if (bWait) m_qMessagesIn.wait();
+
 		size_t nMessageCount = 0;
 		while (nMessageCount < nMaxMessages && !m_qMessagesIn.empty()) {
 			// grab front message
