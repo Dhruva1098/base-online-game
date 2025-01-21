@@ -4,6 +4,7 @@
 #include "net_message.h"
 
 
+// Client
 template <typename T>
 class client_interface
 {
@@ -24,14 +25,14 @@ public:
 	{
 		try
 		{
-			// Resolve hostname/ip-address into physical address
+			// Resolve hostname/ip-address into tangiable physical address
 			asio::ip::tcp::resolver resolver(m_context);
-			asio::ip::tcp::resolver::results_type endpoints = resolver.resolve(host, std::to_string(port)); 
+			asio::ip::tcp::resolver::results_type endpoints = resolver.resolve(host, std::to_string(port));
 
 			// Create connection
 			m_connection = std::make_unique<connection<T>>(connection<T>::owner::client, m_context, asio::ip::tcp::socket(m_context), m_qMessagesIn);
 
-			// Tell the connection object to connect to server also give something to context to dp
+			// Tell the connection object to connect to server
 			m_connection->ConnectToServer(endpoints);
 
 			// Start Context Thread
@@ -99,4 +100,4 @@ protected:
 private:
 	// This is the thread safe queue of incoming messages from server
 	tsqueue<owned_message<T>> m_qMessagesIn;
-};
+};;

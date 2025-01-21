@@ -1,148 +1,244 @@
 #pragma once
+
 #include "net_thread_safe_queue.h"
 #include "net_connection.h"
 #include "net_common.h"
 #include "net_message.h"
 
+// Server
 template<typename T>
-class server_interface {
+class server_interface
+{
 public:
-	server_interface(uint16_t port) 
-		: m_asioAcceptor(m_asioContext, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), port)){
+	// Create a server, ready to listen on specified port
+	server_interface(uint16_t port)
+		: m_asioAcceptor(m_asioContext, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), port))
+	{
 
 	}
-	virtual ~server_interface() {
+
+	virtual ~server_interface()
+	{
+		// May as well try and tidy up
 		Stop();
 	}
 
-	bool Start() {
-		try {
+	// Starts the server!
+	bool Start()
+	{
+		try
+		{
+			// Issue a task to the asio context - This is important
+			// as it will prime the context with "work", and stop it
+			// from exiting immediately. Since this is a server, we 
+			// want it primed ready to handle clients trying to
+			// connect.
 			WaitForClientConnection();
 
-			m_threadContext = std::thread([this]() { m_asioContext.run(); }); // order is important because we need to keep it alive
-
+			// Launch the asio context in its own thread
+			m_threadContext = std::thread([this]() { m_asioContext.run(); });
 		}
-		catch (std::exception& e) {
-			std::cerr << "[SERVER] exception occured: " << e.what() << "\n";
+		catch (std::exception& e)
+		{
+			// Something prohibited the server from listening
+			std::cerr << "[SERVER] Exception: " << e.what() << "\n";
 			return false;
 		}
-		std::cout << "[SERVER] Started" << "\n";
+
+		std::cout << "[SERVER] Started!\n";
 		return true;
 	}
 
-	void Stop() {
-		// close context
+	// Stops the server!
+	void Stop()
+	{
+		// Request the context to close
 		m_asioContext.stop();
-		
-		// tidy up thread
+
+		// Tidy up the context thread
 		if (m_threadContext.joinable()) m_threadContext.join();
-		
-		std::cout << "[SERVER] Stopped" << "\n";
+
+		// Inform someone, anybody, if they care...
+		std::cout << "[SERVER] Stopped!\n";
 	}
-public:
-	// async (performed by asio)
-	void WaitForClientConnection() {
+
+	// ASYNC - Instruct asio to wait for connection
+	void WaitForClientConnection()
+	{
+		// Prime context with an instruction to wait until a socket connects. This
+		// is the purpose of an "acceptor" object. It will provide a unique socket
+		// for each incoming connection attempt
 		m_asioAcceptor.async_accept(
-			[this](std::error_code ec, asio::ip::tcp::socket socket) {
-				if (!ec) {
-					std::cout << "[SERVER] New connection established: " << socket.remote_endpoint() << "\n";
+			[this](std::error_code ec, asio::ip::tcp::socket socket)
+			{
+				// Triggered by incoming connection request
+				if (!ec)
+				{
+					// Display some useful(?) information
+					std::cout << "[SERVER] New Connection: " << socket.remote_endpoint() << "\n";
+
+					// Create a new connection to handle this client 
 					std::shared_ptr<connection<T>> newconn =
 						std::make_shared<connection<T>>(connection<T>::owner::server,
 							m_asioContext, std::move(socket), m_qMessagesIn);
 
-					// user can deny connection
-					if (OnClientConnect(newconn)) {
+
+
+					// Give the user server a chance to deny connection
+					if (OnClientConnect(newconn))
+					{
+						// Connection allowed, so add to container of new connections
 						m_deqConnections.push_back(std::move(newconn));
-						m_deqConnections.back()->ConnectToClient(nIDCounter++);
+
+						// And very important! Issue a task to the connection's
+						// asio context to sit and wait for bytes to arrive!
+						m_deqConnections.back()->ConnectToClient(this, nIDCounter++);
+
 						std::cout << "[" << m_deqConnections.back()->GetID() << "] Connection Approved\n";
 					}
-					else {
-						std::cout << "[----] Connection denied\n";
+					else
+					{
+						std::cout << "[-----] Connection Denied\n";
+
+						// Connection will go out of scope with no pending tasks, so will
+						// get destroyed automagically due to the wonder of smart pointers
 					}
 				}
-				else {
-					std::cerr << "[SERVER] New connection error: " << ec.message() << "\n";
+				else
+				{
+					// Error has occurred during acceptance
+					std::cout << "[SERVER] New Connection Error: " << ec.message() << "\n";
 				}
-				// wait for another connection - re-register another async task
+
+				// Prime the asio context with more work - again simply wait for
+				// another connection...
 				WaitForClientConnection();
-
-			}
-		);
+			});
 	}
-	// send message to a specific client
-	void MessageClient(std::shared_ptr<connection<T>> client, const message<T>& msg) {
-		if (client && client->IsConnectrd()) {
+
+	// Send a message to a specific client
+	void MessageClient(std::shared_ptr<connection<T>> client, const message<T>& msg)
+	{
+		// Check client is legitimate...
+		if (client && client->IsConnected())
+		{
+			// ...and post the message via the connection
 			client->Send(msg);
-		}  // now we do not know if client has disconnected because of TCP limitations, so if he has disconnected
-			// we remove him
-
-		else {
-			OnClientDisconnect(client);
-			m_deqConnections.erase(
-				std::remove(m_deqConnections.begin(), m_deqConnections.end(), client));
 		}
+		else
+		{
+			// If we cant communicate with client then we may as 
+			// well remove the client - let the server know, it may
+			// be tracking it somehow
+			OnClientDisconnect(client);
 
+			// Off you go now, bye bye!
+			client.reset();
+
+			// Then physically remove it from the container
+			m_deqConnections.erase(
+				std::remove(m_deqConnections.begin(), m_deqConnections.end(), client), m_deqConnections.end());
+		}
 	}
-	// send message to all clients
-	void MessageAllClients(const message<T>& msg, std::shared_ptr<connection<T>> pIgnoreClient = nullptr) {
+
+	// Send message to all clients
+	void MessageAllClients(const message<T>& msg, std::shared_ptr<connection<T>> pIgnoreClient = nullptr)
+	{
 		bool bInvalidClientExists = false;
-		for (auto& client : m_deqConnections) {
-			if (client && client->IsConnected()) {
+
+		// Iterate through all clients in container
+		for (auto& client : m_deqConnections)
+		{
+			// Check client is connected...
+			if (client && client->IsConnected())
+			{
+				// ..it is!
 				if (client != pIgnoreClient)
 					client->Send(msg);
 			}
-			else {
-				// assume client is disconnected
+			else
+			{
+				// The client couldnt be contacted, so assume it has
+				// disconnected.
 				OnClientDisconnect(client);
 				client.reset();
-				bInvalidClientExists = true;	
+
+				// Set this flag to then remove dead clients from container
+				bInvalidClientExists = true;
 			}
 		}
-		// Little optimisation, als i do not want to change deque while iterating through it
+
+		// Remove dead clients, all in one go - this way, we dont invalidate the
+		// container as we iterated through it.
 		if (bInvalidClientExists)
 			m_deqConnections.erase(
-				std::remove(m_deqConnections.begin(), m_deqConnections.end(), nullptr));
+				std::remove(m_deqConnections.begin(), m_deqConnections.end(), nullptr), m_deqConnections.end());
 	}
-	void Update(size_t nMaxMessages = -1, bool bWait = false) {
+
+	// Force server to respond to incoming messages
+	void Update(size_t nMaxMessages = -1, bool bWait = false)
+	{
 		if (bWait) m_qMessagesIn.wait();
 
+		// Process as many messages as you can up to the value
+		// specified
 		size_t nMessageCount = 0;
-		while (nMessageCount < nMaxMessages && !m_qMessagesIn.empty()) {
-			// grab front message
+		while (nMessageCount < nMaxMessages && !m_qMessagesIn.empty())
+		{
+			// Grab the front message
 			auto msg = m_qMessagesIn.pop_front();
 
-			// pass it to message handler
+			// Pass to message handler
 			OnMessage(msg.remote, msg.msg);
+
 			nMessageCount++;
 		}
 	}
 
 protected:
-	// when a client connects, can veto connection by returning false
-	virtual bool OnClientConnect(std::shared_ptr<connection<T>> client) {
+	// This server class should override thse functions to implement
+	// customised functionality
+
+	// Called when a client connects, you can veto the connection by returning false
+	virtual bool OnClientConnect(std::shared_ptr<connection<T>> client)
+	{
 		return false;
 	}
-	// client disconnects
-	virtual void OnClientDisconnect(std::shared_ptr<connection<T>> client) {
+
+	// Called when a client appears to have disconnected
+	virtual void OnClientDisconnect(std::shared_ptr<connection<T>> client)
+	{
 
 	}
-	// when message arrives
-	virtual void OnMessage(std::shared_ptr<connection<T>> client, message<T>& msg) {
+
+	// Called when a message arrives
+	virtual void OnMessage(std::shared_ptr<connection<T>> client, message<T>& msg)
+	{
 
 	}
+
+public:
+	// Called when a client is validated
+	virtual void OnClientValidated(std::shared_ptr<connection<T>> client)
+	{
+
+	}
+
+
 protected:
-	// thread sage queue for incoming messages
+	// Thread Safe Queue for incoming message packets
 	tsqueue<owned_message<T>> m_qMessagesIn;
 
-	// container for all active connections
+	// Container of active validated connections
 	std::deque<std::shared_ptr<connection<T>>> m_deqConnections;
-	
-	// order of init of asio
+
+	// Order of declaration is important - it is also the order of initialisation
 	asio::io_context m_asioContext;
 	std::thread m_threadContext;
 
-	asio::ip::tcp::acceptor m_asioAcceptor;
-	
-	// every client is identified using a unique id
-	uint16_t nIDCounter = 10000; // because we do not want to send ip of others to clients
+	// These things need an asio context
+	asio::ip::tcp::acceptor m_asioAcceptor; // Handles new incoming connection attempts...
+
+	// Clients will be identified in the "wider system" via an ID
+	uint32_t nIDCounter = 10000;
 };
