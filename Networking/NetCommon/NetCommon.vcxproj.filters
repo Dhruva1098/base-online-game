@@ -21,7 +21,7 @@
     <ClInclude Include="net_message.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="olc.h">
+    <ClInclude Include="network_system.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="net_thread_safe_queue.h">

@@ -1,8 +1,9 @@
 #pragma once
 #include <cstdint>
+#include <string.h>
 
 #define OLC_PGE_APPLICATION
-#include "olcPixelGameEngine.h"
+#include "olcPGEX_TransformedView.h"
 
 #define NETWORKIN_SYSTEM
 #include <network_system.h>
