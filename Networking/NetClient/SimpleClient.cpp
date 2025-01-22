@@ -1,7 +1,7 @@
 #include <iostream>
 #include <thread>
 #include <chrono>
-#include <olc.h>
+#include <network_system.h>
 
 
 enum class CustomMsgTypes : uint32_t
